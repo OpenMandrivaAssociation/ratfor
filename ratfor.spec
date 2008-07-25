@@ -1,6 +1,6 @@
 %define name ratfor
 %define version 1.0.8
-%define release %mkrel 3
+%define release %mkrel 5
 
 Summary:		Ratfor fortran preprocessor
 Name:			%name
