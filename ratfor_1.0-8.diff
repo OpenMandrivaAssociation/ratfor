@@ -1,0 +1,493 @@
+--- ratfor-1.0.orig/getopt.c
++++ ratfor-1.0/getopt.c
+@@ -3,13 +3,14 @@
+  */
+ 
+ #include <stdio.h>
+-#include <string.h>
+ 
+ char	*optarg;	/* Global argument pointer. */
+ int	optind77 = 0;	/* Global argv index. */
+ 
+ static char	*scan = NULL;	/* Private scan pointer. */
+ 
++extern char	*index();
++
+ int
+ our_getopt(argc, argv, optstring)
+ int argc;
+@@ -37,7 +38,7 @@
+ 	}
+ 
+ 	c = *scan++;
+-	place = strchr(optstring, (int) c);
++	place = index(optstring, c);
+ 
+ 	if (place == NULL || c == ':') {
+ 		fprintf(stderr, "%s: unknown option -%c\n", argv[0], c);
+--- ratfor-1.0.orig/rat4.c
++++ ratfor-1.0/rat4.c
+@@ -31,6 +31,12 @@
+  *	- support both && and & for .and.
+  *	- support both || and | for .or.
+  *
++ * 11-15-95 Emilio Lopes <ecl@if.usp.br> (Search for ECL to see my changes)
++ *      - Option -l now works (was disabled by some reason).
++ *      - Removed from usage message the options that are not yet
++ *        implemented.
++ *      - Added option -?, that shows usage message.
++ *
+  */
+ 
+ #include <stdio.h>
+@@ -160,7 +166,8 @@
+ 
+ 	progname = argv[0];
+ 
+-	while ((c=our_getopt(argc, argv, "Chn:o:6:")) != EOF)
++/* ECL	while ((c=our_getopt(argc, argv, "Chn:l:o:6:")) != EOF) */
++	while ((c=our_getopt(argc, argv, "C?n:l:o:")) != EOF)
+ 	switch (c) {
+ 		case 'C':
+ 			leaveC = YES; /* keep comments in src */
+@@ -178,13 +185,17 @@
+ 		case '6':
+ 				/* not written yet */
+ 			break;
++                case '?':                    /* ECL */
++                        ++errflg;
++                        break;
+ 		default:
+ 			++errflg;
+ 	}
+ 
+ 	if (errflg) {
+ 		fprintf(stderr,
+-		"usage: %s [-C][-hx][-l n][-o file][-6x] [file...]\n",progname);
++/* ECL		"usage: %s [-C][-hx][-l n][-o file][-6x] [file...]\n",progname); */
++		"usage: %s [-?] [-C] [-l n] [-o file] [file...]\n",progname);
+ 		exit(1);
+ 	}
+ 
+@@ -485,7 +496,7 @@
+ 				baderr("definition too long.");
+ 			defn[i++] = c;
+ 		}
+-		while (c != SHARP && c != NEWLINE && c != (S_CHAR)EOF && c != PERCENT);
++		while (c != SHARP && c != NEWLINE && c != EOF && c != PERCENT);
+ 		if (c == SHARP || c == PERCENT)
+ 			putbak(c);
+ 	}
+@@ -497,7 +508,7 @@
+ 		for (i = 0; nlpar >= 0; i++)
+ 			if (i > defsiz)
+ 				baderr("definition too long.");
+-			else if (ngetch(&defn[i], fd) == (S_CHAR)EOF)
++			else if (ngetch(&defn[i], fd) == EOF)
+ 				baderr("missing right paren.");
+ 			else if (defn[i] == LPAREN)
+ 				nlpar++;
+@@ -743,7 +754,7 @@
+ 	if (lexstr[0] == NEWLINE)
+ 		linect[level] = linect[level] + 1;
+ 
+-#if defined(CRAY) || defined(GNU)
++#ifdef CRAY
+ /* cray cannot compare char and ints, since EOF is an int we check with feof */
+ 	if (feof(fd)) tok = EOF;
+ #endif
+@@ -1111,7 +1122,7 @@
+ 				nlpar++;
+ 			else if (t == RPAREN)
+ 				nlpar--;
+-			if (t == (S_CHAR)EOF) {
++			if (t == EOF) {
+ 				pbstr(token);
+ 				return;
+ 			}
+@@ -1138,13 +1149,12 @@
+ 			nlpar++;
+ 		else if (t == RPAREN)
+ 			nlpar--;
+-		if (t == (S_CHAR)EOF) {
++		if (t == EOF) {
+ 			pbstr(token);
+ 			break;
+ 		}
+ 		if (nlpar >= 0 && t != NEWLINE && t != UNDERLINE) {
+-			if ((j + ((int) strlen((char *) (&token[0])))) >=
+-				((int) MAXFORSTK))
++			if (j + strlen((char *) (&token[0])) >= MAXFORSTK)
+ 				baderr("for clause too long.");
+ 			scopy(token, 0, forstk, j);
+ 			j = j + strlen((char *) (&token[0]));
+@@ -1168,7 +1178,7 @@
+ 	j = 0;
+ 	for (i = 1; i < fordep; i++)
+ 		j = j + strlen((char *) (&forstk[j])) + 1;
+-	if (((int) strlen((char *) (&forstk[j]))) > ((int) 0)) {
++	if (strlen((char *) (&forstk[j])) > 0) {
+ 		outtab();
+ 		outstr(&forstk[j]);
+ 		outdon();
+--- ratfor-1.0.orig/Makefile
++++ ratfor-1.0/Makefile
+@@ -0,0 +1,31 @@
++PROG =	ratfor
++
++SRCS =	getopt.c lookup.c rat4.c
++
++OBJS =	getopt.o lookup.o rat4.o
++
++LIBS =	
++
++INSTALL = install -s
++PREFIX = /usr/local
++BINDIR = $(PREFIX)/bin
++MANDIR = $(PREFIX)/man/man1
++
++CC = gcc
++CFLAGS = -O2 -DF77 -DS_CHAR="signed char"
++LDFLAGS =
++
++all: $(PROG)
++
++$(PROG): $(OBJS)
++	$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
++
++install: all
++	$(INSTALL) -o root -g root -m 755 ratfor $(BINDIR)
++	$(INSTALL) -o root -g root -m 644 ratfor.1 $(MANDIR)
++
++clean:
++	rm -f $(PROG) $(OBJS) *~ "#*#"
++
++lookup.o: lookup.h
++rat4.o: ratdef.h ratcom.h lookup.h
+--- ratfor-1.0.orig/ratfor.1
++++ ratfor-1.0/ratfor.1
+@@ -0,0 +1,95 @@
++.TH RATFOR 1 "Jun 1996"
++.SH NAME
++ratfor77 \- ratfor preprocessor for Fortran 77
++
++.SH SYNOPSIS
++.B ratfor 
++.RB [ -l
++.IR n ]
++.RB [ -C ] 
++.RB [ -o
++.IR outputfile ]
++.I filename
++
++.SH PARAMETERS
++.TP 8
++.BI -l " n"
++Set starting label number.
++.TP 8
++.BI -o " output"
++Specify output file; default is stdout.
++.TP 8
++.B -C
++Keep comments in (useful for compiler directives).
++.TP 8
++.B -?
++Show summary of options.
++
++.SH DESCRIPTION
++Ratfor has the following syntax:
++
++prog:   stat
++        prog stat
++
++stat:   if (...) stat
++        if (...) stat else stat
++        while (...) stat
++        repeat stat
++        repeat stat until (...)
++        for (...;...;...) stat
++        do ... stat
++        switch (intexpr) { case val[,val]: stmt ... default: stmt }
++        break n
++        next n
++        return (...)
++        digits stat
++        { prog }  or  [ prog ]  or  $( prog $)
++        anything unrecognizable
++
++where stat is any Fortran or Ratfor statement, and intexpr is an
++expression that resolves into an integer value.  A statement is
++terminated by an end-of-line or a semicolon.  The following translations
++are also performed.
++
++        <       .lt.    <=      .le.
++        ==      .eq.
++        !=      .ne.    ^=      .ne.    ~=      .ne.
++        >=      .ge.    >       .gt.
++        |       .or.    &       .and.
++        !       .not.   ^       .not.   ~       .not.
++
++Integer constants in bases other that decimal may be specified as
++n%dddd...  where n is a decimal number indicating the base and dddd...
++are digits in that base.  For bases > 10, letters are used for digits
++above 9.  Examples:  8%77, 16%2ff, 2%0010011.  The number is converted
++the equivalent decimal value using multiplication; this may cause sign
++problems if the number has too many digits.
++
++String literals ("..." or '...') can be continued across line boundaries
++by ending the line to be continued with an underline.  The underline is
++not included as part of the literal.  Leading blanks and tabs on the
++next line are ignored; this facilitates consistent indentation.
++
++        include file
++
++will include the named file in the input.
++
++        define (name,value)     or
++        define name value
++
++defines name as a symbolic parameter with the indicated value.  Names of
++symbolic parameters may contain letters, digits, periods, and underline
++character but must begin with a letter (e.g.  B.FLAG).  Upper case is
++not equivalent to lower case in parameter names.
++
++        string name "character string"          or
++        string name(size) "character string"
++
++defines name to be an integer array long enough to accommodate the ASCII
++codes for the given character string, one per word.  The last word of
++name is initialized to the symbolic parameter EOS, and indicates the end
++of string.
++
++.SH KEYWORDS
++ratfor fortran preprocessor fortran77 ratfor77 spp
++
+--- ratfor-1.0.orig/debian/prerm
++++ ratfor-1.0/debian/prerm
+@@ -0,0 +1,6 @@
++#!/bin/sh
++set -e
++if [ \( "$1" = "upgrade" -o "$1"="remove" \) -a \
++    -L /usr/doc/ratfor ]; then
++  rm -f /usr/doc/ratfor
++fi
+--- ratfor-1.0.orig/debian/control
++++ ratfor-1.0/debian/control
+@@ -0,0 +1,17 @@
++Source: ratfor
++Section: devel
++Priority: optional
++Maintainer: Alan Bain <afrb2@cam.ac.uk> 
++Standards-Version: 3.5.6.1
++
++Package: ratfor
++Architecture: any
++Depends: ${shlibs:Depends}
++Recommends: g77 | f2c
++Description: Rational Fortran preprocessor for Fortran 77.
++ Ratfor77 is a preprocessor that converts the Rational Fortran dialect
++ into ordinary Fortran 77. The output can then be compiled using g77
++ or f2c + gcc.
++ .
++ The Ratfor dialect provides C-like control structures and some
++ syntactic sugar that makes Fortran programs easier to read and write.
+--- ratfor-1.0.orig/debian/postinst
++++ ratfor-1.0/debian/postinst
+@@ -0,0 +1,9 @@
++#!/bin/sh
++set -e
++if [ "$1" = "configure" ]; then
++ if [ -d /usr/doc -a ! -e /usr/doc/xnecview \
++          -a -d /usr/share/doc/ratfor ]; then
++  ln -sf ../share/doc/ratfor /usr/doc/ratfor
++ fi
++fi
++
+--- ratfor-1.0.orig/debian/rules
++++ ratfor-1.0/debian/rules
+@@ -0,0 +1,83 @@
++#!/usr/bin/make -f
++## This is the debian.rules file for the package
++## ratfor, by Emilio C. Lopes <ecl@finpe.if.usp.br>.
++## updated by Alan Bain <afrb2@cam.ac.uk>.
++
++## updated based on f2c's files and hello package
++package=ratfor
++
++## The architecture
++arch = $(shell dpkg --print-architecture)
++
++
++build:  
++	$(checkdir)
++## Builds the binary package.
++	make -f Makefile
++	touch stamp-build
++
++clean: $(checkdir)
++## Undoes the effect of `make -f debian.rules build'.
++	make -f Makefile clean
++	rm -f stamp-build debian/files debian/substvars
++	rm -rf debian/tmp
++
++binary-indep:  checkroot build
++	$(checkdir)
++
++binary-arch: checkroot build 
++	$(checkdir)
++## Makes a binary package.
++	test -f stamp-build || make -f debian/rules build
++	rm -rf debian/tmp >& /dev/null
++	install -d -o root -g root -m 755 debian/tmp
++	chmod g-s debian/tmp
++	install -d -o root -g root -m 755 debian/tmp/usr/bin
++	install -s -o root -g root -m 755 ratfor debian/tmp/usr/bin
++	install -d -o root -g root -m 755 debian/tmp/usr/share/man/man1
++	install -o root -g root -m 644 ratfor.1 debian/tmp/usr/share/man/man1
++	gzip -9f debian/tmp/usr/share/man/man1/ratfor.1
++	install -d -o root -g root -m 755 debian/tmp/usr/share/doc/$(package)
++	install -o root -g root -m 644  BUGS\
++	  debian/tmp/usr/share/doc/$(package)
++## do package copyright
++	install -d -o root -g root -m 755 debian/tmp/usr/share/doc/$(package)
++	install -o root -g root -m 644  debian/copyright \
++	debian/tmp/usr/share/doc/$(package)/copyright
++	install -d -o root -g root -m 755 debian/tmp/usr/share/doc/$(package)/examples
++	install -o root -g root -m 644 *.r \
++	  debian/tmp/usr/share/doc/$(package)/examples
++	gzip -9f debian/tmp/usr/share/doc/$(package)/examples/*.r
++	install -d -o root -g root -m 755 debian/tmp/DEBIAN
++	install -m 755 debian/postinst \
++				debian/tmp/DEBIAN/postinst
++	install -m 755 debian/prerm \
++				debian/tmp/DEBIAN/prerm
++
++	install -c -m 0644 debian/changelog \
++                              debian/tmp/usr/share/doc/$(package)/changelog.Debian 
++	gzip -9 debian/tmp/usr/share/doc/$(package)/changelog.Debian
++	dpkg-shlibdeps ./ratfor                                                
++	dpkg-gencontrol                                                         
++	chown -R root.root debian/tmp                                           
++	chmod -R go-ws debian/tmp
++	dpkg --build debian/tmp ..
++
++define checkdir                                                                 
++	test -f rat4.c -a -f debian/rules                                 
++endef                                                                           
++                                                                               
++## Below Here is Generic                                                        
++                                                                                
++binary: binary-indep binary-arch                                                
++                                                                                
++source diff:                                                                    
++	@echo >&2 'source and diff are obsolete - use dpkg-source -b'; false    
++                                                                                
++dist:  binary source diff changes                                               
++
++checkroot:
++	$(checkdir)
++	test root = "`whoami`"
++.PHONY: binary binary-arch binary-indep clean checkroot
++
+--- ratfor-1.0.orig/debian/changelog
++++ ratfor-1.0/debian/changelog
+@@ -0,0 +1,59 @@
++ratfor (1.0-8) unstable; urgency=low
++  * Ratfor source stable; no significant maintenance has been 
++    required, but the maintainer is still active.
++ -- Alan Bain <afrb2@debian.org>  Thur, 13 Jun 2002 10:15:00 -0700
++
++ratfor (1.0-7) unstable; urgency=low
++  * Changelog now compressed
++  * FHS file locations adopted
++ -- Alan Bain <afrb2@cam.ac.uk>  Tue, 26 Oct 1999 14:00:00 +0100
++
++ratfor (1.0-6) unstable; urgency=low
++  * non-maintainer uploads incorporated into package
++ -- Alan Bain <afrb2@cam.ac.uk>  Wed, 12 May 1999 10:30:00 +0100
++
++ratfor (1.0-5.2) unstable; urgency=low
++
++  * non-maintainer upload to fix old bug reports
++  * fixed debian/rules to use "make -f Makefile". Fixes:#25713,#27002,#27028
++  * .2 version to override the Alpha .1 sourceless NMU
++
++ -- Paul Slootman <paul@debian.org>  Wed, 16 Dec 1998 11:31:32 +0100
++
++ratfor (1.0-5) unstable; urgency=low
++        * copyright location now fixed
++ -- Alan Bain <afrb2@cam.ac.uk>  Sun, 21 Jun 1998 22:30:00 +0100
++ratfor (1.0-4) unstable; urgency=low
++        * fixed packaging problems which remained
++        * new standards version
++ -- Alan Bain <afrb2@cam.ac.uk>  Fri, 8 May 1998 14:00:00 +0100
++Mon Jan 19 18:00:00 1998  Alan Bain <afrb2@cam.ac.uk>
++       
++        * Updated to new source package format
++
++Fri Aug  2 19:22:05 1996  Emilio Lopes  <ecl@fnpc21.if.usp.br>
++
++	* debian.control (Recommends): now "g77 | f2c", previously "g77,
++ 	f2c".
++
++Thu Jul 18 18:43:36 1996  Emilio Lopes  <ecl@fnpc21.if.usp.br>
++
++	* debian.rules: changed in order to support the "Priority:"
++ 	  field. Created target to make the changes file. Changed to
++ 	  support the new naming convention using underscores.
++      
++	* debian.control: added "Priority:" field. No more recommends gcc;
++ 	  it's up to f2c to do this.
++	
++Wed Jun 26 17:17:17 1996  Emilio Lopes  <ecl@fnpc21.if.usp.br>
++
++	* debian.control: Changed to support multi-architecture.
++
++	* debian.rules: Changed to support multi-architecture.
++ 	                Now uses dpkg-name to move .deb file
++
++	* ratfor.1: Fixed some fontchange commands.
++Local variables:
++mode: debian-changelog
++End:
++
+--- ratfor-1.0.orig/debian/copyright
++++ ratfor-1.0/debian/copyright
+@@ -0,0 +1,37 @@
++Author
++======
++
++Ratfor77 was written by: oz
++                         Usenet: [decvax|ihnp4]!utzoo!yetti!oz ||
++                                     ...seismo!mnetor!yetti!oz
++                         Bitnet: oz@[yusol|yuyetti].BITNET
++                         Phonet: [416] 736-5257 x 3976
++
++This package was put together by Emilio Lopes <ecl@finpe.if.usp.br>,
++from sources obtained from:
++
++   sepftp.stanford.edu:/pub/sep-distr/tools/ratfor77
++
++
++Copyright information
++=====================
++
++The following copyright information was extracted from the file
++`README' in the original distribution:
++
++   This code *is* PD. You (public) have all the rights to the code.
++   [But this also means you (singular) do not have any *extra*
++   rights to the code, hence it is impossible for you to restrict
++   the use and distribution of this code in any way.]
++   
++   I would, as usual, appreciate hearing about bug fixes and
++   improvements.
++   
++   oz
++   
++   Usenet: [decvax|ihnp4]!utzoo!yetti!oz ||
++               ...seismo!mnetor!yetti!oz
++   Bitnet: oz@[yusol|yuyetti].BITNET
++   Phonet: [416] 736-5257 x 3976
++
++EOF
