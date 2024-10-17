@@ -17,7 +17,7 @@ Source1:		ratfor.ps.bz2
 # Patch from Debian
 Patch0:			ratfor_1.0-8.diff
 
-URL:			http://sepwww.stanford.edu/software/%{name}.html
+URL:			https://sepwww.stanford.edu/software/%{name}.html
 
 BuildRoot:		%{_tmppath}/%{name}-buildroot
 ExclusiveArch:		%{ix86} ia64 x86_64 amd64
