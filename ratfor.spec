@@ -22,6 +22,7 @@ URL:			https://sepwww.stanford.edu/software/%{name}.html
 BuildRoot:		%{_tmppath}/%{name}-buildroot
 ExclusiveArch:		%{ix86} ia64 x86_64 amd64
 
+BuildRequires:	make
 %description
 Ratfor is preprocessor for FORTRAN code that allows us to use C-like 
 flow expressions. From the Stanford Exploration Project.
